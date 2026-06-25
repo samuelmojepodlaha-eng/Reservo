@@ -30,3 +30,7 @@ export async function capturePayment(paymentIntentId: string) {
 export async function cancelPayment(paymentIntentId: string) {
   return stripe.paymentIntents.cancel(paymentIntentId);
 }
+
+export async function refundPayment(paymentIntentId: string) {
+  return stripe.refunds.create({ payment_intent: paymentIntentId });
+}

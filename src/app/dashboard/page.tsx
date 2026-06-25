@@ -56,7 +56,7 @@ export default function DashboardPage() {
 
   const handleAction = async (
     reservationId: string,
-    action: "arrived" | "noshow" | "cancel"
+    action: "arrived" | "noshow" | "cancel" | "undo"
   ) => {
     setActionLoading(reservationId + action);
     setActionError(null);
@@ -201,7 +201,7 @@ function ReservationRow({
   actionLoading,
 }: {
   reservation: Reservation;
-  onAction: (id: string, action: "arrived" | "noshow" | "cancel") => void;
+  onAction: (id: string, action: "arrived" | "noshow" | "cancel" | "undo") => void;
   actionLoading: string | null;
 }) {
   const isActive = r.status === "PENDING" || r.status === "CONFIRMED";
@@ -252,6 +252,16 @@ function ReservationRow({
             Zrušiť
           </button>
         </div>
+      )}
+      {(r.status === "NO_SHOW" || r.status === "ARRIVED") && (
+        <button
+          onClick={() => onAction(r.id, "undo")}
+          disabled={actionLoading !== null}
+          title={r.paymentStatus === "CAPTURED" ? "Platba bude vrátená zákazníkovi" : ""}
+          className="bg-orange-100 text-orange-700 text-sm px-3 py-1.5 rounded-lg hover:bg-orange-200 disabled:opacity-50 transition shrink-0"
+        >
+          ↩ Vrátiť
+        </button>
       )}
     </div>
   );

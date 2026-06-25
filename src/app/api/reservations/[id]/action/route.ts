@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { capturePayment, cancelPayment } from "@/lib/stripe";
+import { capturePayment, cancelPayment, refundPayment } from "@/lib/stripe";
 
 export async function POST(
   req: NextRequest,
@@ -19,6 +19,29 @@ export async function POST(
 
   const isActive =
     reservation.status === "PENDING" || reservation.status === "CONFIRMED";
+  const isReversible =
+    reservation.status === "NO_SHOW" || reservation.status === "ARRIVED";
+
+  // Vrátenie omylom uzavretej rezervácie
+  if (action === "undo") {
+    if (!isReversible) {
+      return NextResponse.json({ error: "Túto rezerváciu nie je možné vrátiť" }, { status: 400 });
+    }
+    if (reservation.paymentStatus === "CAPTURED") {
+      await refundPayment(reservation.stripePaymentIntentId);
+      await prisma.reservation.update({
+        where: { id },
+        data: { status: "CONFIRMED", paymentStatus: "REFUNDED" },
+      });
+      return NextResponse.json({ success: true, message: "Platba vrátená zákazníkovi, rezervácia znova otvorená" });
+    } else {
+      await prisma.reservation.update({
+        where: { id },
+        data: { status: "CONFIRMED" },
+      });
+      return NextResponse.json({ success: true, message: "Rezervácia znova otvorená" });
+    }
+  }
 
   if (!isActive) {
     return NextResponse.json(
