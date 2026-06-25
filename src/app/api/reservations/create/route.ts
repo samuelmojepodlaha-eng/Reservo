@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createPaymentHold } from "@/lib/stripe";
+import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       status: "PENDING",
       stripePaymentIntentId: paymentIntent.id,
       paymentStatus: "HELD",
+      cancelToken: uuidv4(),
     },
   });
 

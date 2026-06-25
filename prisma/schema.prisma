@@ -47,6 +47,8 @@ model Reservation {
   stripePaymentIntentId String?
   paymentStatus         PaymentStatus     @default(HELD)
   note                  String?
+  cancelToken           String?     @unique
+  reminderSent          Boolean     @default(false)
   restaurant            Restaurant  @relation(fields: [restaurantId], references: [id])
   table                 Table       @relation(fields: [tableId], references: [id])
   createdAt             DateTime    @default(now())
