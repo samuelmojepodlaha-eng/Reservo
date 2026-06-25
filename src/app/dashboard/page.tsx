@@ -37,11 +37,16 @@ const STATUS_COLORS: Record<ReservationStatus, string> = {
   CANCELLED: "bg-gray-100 text-gray-600",
 };
 
+function getDateStr(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("sv-SE");
+}
+
 export default function DashboardPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const fetchReservations = async () => {
     const res = await fetch("/api/dashboard/reservations");
@@ -73,15 +78,23 @@ export default function DashboardPage() {
     setActionLoading(null);
   };
 
-  const todayStr = new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD v lokálnom čase
-  const todayReservations = reservations.filter((r) => {
-    const d = new Date(r.date);
-    return d.toLocaleDateString("sv-SE") === todayStr;
-  });
-  const upcomingReservations = reservations.filter((r) => {
-    const d = new Date(r.date);
-    return d.toLocaleDateString("sv-SE") > todayStr;
-  });
+  const todayStr = new Date().toLocaleDateString("sv-SE");
+
+  // Zoskupenie rezervácií podľa dátumu
+  const byDate = reservations
+    .filter((r) => r.status !== "CANCELLED")
+    .reduce<Record<string, Reservation[]>>((acc, r) => {
+      const d = getDateStr(r.date);
+      if (!acc[d]) acc[d] = [];
+      acc[d].push(r);
+      return acc;
+    }, {});
+
+  const sortedDates = Object.keys(byDate).sort();
+
+  // Rezervácie pre vybraný deň (alebo dnes ak nič nie je vybrané)
+  const activeDateStr = selectedDate ?? todayStr;
+  const selectedReservations = byDate[activeDateStr] ?? [];
 
   if (loading) {
     return (
@@ -98,99 +111,113 @@ export default function DashboardPage() {
         <p className="text-sm text-gray-500">Správa rezervácií</p>
       </div>
 
-      <div className="p-6 space-y-8 max-w-5xl mx-auto">
+      <div className="p-6 space-y-6 max-w-5xl mx-auto">
         {actionError && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
             {actionError}
           </div>
         )}
-        <div className="grid grid-cols-3 gap-4">
-          <StatCard
-            label="Dnešné rezervácie"
-            value={todayReservations.length}
-            color="blue"
-          />
-          <StatCard
-            label="Príchody potvrdené"
-            value={reservations.filter((r) => r.status === "ARRIVED").length}
-            color="green"
-          />
-          <StatCard
-            label="No-show dnes"
-            value={
-              todayReservations.filter((r) => r.status === "NO_SHOW").length
-            }
-            color="red"
-          />
+
+        {/* Kalendárny prehľad */}
+        <div>
+          <h2 className="font-semibold text-gray-700 mb-3">Prehľad podľa dní</h2>
+          {sortedDates.length === 0 ? (
+            <div className="bg-white rounded-xl shadow p-6 text-center text-gray-400 text-sm">
+              Žiadne rezervácie
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {sortedDates.map((dateStr) => {
+                const dayRes = byDate[dateStr];
+                const confirmed = dayRes.filter(
+                  (r) => r.status === "CONFIRMED" || r.status === "ARRIVED"
+                ).length;
+                const pending = dayRes.filter((r) => r.status === "PENDING").length;
+                const noshow = dayRes.filter((r) => r.status === "NO_SHOW").length;
+                const isToday = dateStr === todayStr;
+                const isSelected = dateStr === activeDateStr;
+                const dateObj = new Date(dateStr + "T12:00:00");
+
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => setSelectedDate(dateStr === activeDateStr && !selectedDate ? null : dateStr)}
+                    className={`rounded-xl p-4 text-left transition border-2 ${
+                      isSelected
+                        ? "border-green-500 bg-green-50"
+                        : isToday
+                        ? "border-blue-300 bg-blue-50"
+                        : "border-transparent bg-white shadow"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-gray-900 text-sm">
+                        {format(dateObj, "d. MMM", { locale: cs })}
+                      </span>
+                      {isToday && (
+                        <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded-full">
+                          dnes
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{dayRes.length}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {format(dateObj, "EEEE", { locale: cs })}
+                    </p>
+                    <div className="mt-2 space-y-0.5">
+                      {confirmed > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-green-700">
+                          <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                          {confirmed} potvrdených
+                        </div>
+                      )}
+                      {pending > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-yellow-700">
+                          <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
+                          {pending} čakajúcich
+                        </div>
+                      )}
+                      {noshow > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-red-600">
+                          <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+                          {noshow} no-show
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <Section title={`Dnes (${todayReservations.length})`}>
-          {todayReservations.length === 0 ? (
-            <p className="text-gray-500 text-sm py-4">Žiadne rezervácie na dnes</p>
-          ) : (
-            todayReservations.map((r) => (
-              <ReservationRow
-                key={r.id}
-                reservation={r}
-                onAction={handleAction}
-                actionLoading={actionLoading}
-              />
-            ))
-          )}
-        </Section>
-
-        <Section title={`Nadchádzajúce (${upcomingReservations.length})`}>
-          {upcomingReservations.length === 0 ? (
-            <p className="text-gray-500 text-sm py-4">Žiadne nadchádzajúce rezervácie</p>
-          ) : (
-            upcomingReservations.map((r) => (
-              <ReservationRow
-                key={r.id}
-                reservation={r}
-                onAction={handleAction}
-                actionLoading={actionLoading}
-              />
-            ))
-          )}
-        </Section>
+        {/* Rezervácie vybraného dňa */}
+        <div>
+          <h2 className="font-semibold text-gray-700 mb-3">
+            {activeDateStr === todayStr
+              ? `Dnes — ${format(new Date(activeDateStr + "T12:00:00"), "d. MMMM yyyy", { locale: cs })}`
+              : format(new Date(activeDateStr + "T12:00:00"), "d. MMMM yyyy", { locale: cs })}
+            {" "}
+            <span className="font-normal text-gray-400">({selectedReservations.length})</span>
+          </h2>
+          <div className="bg-white rounded-xl shadow divide-y">
+            {selectedReservations.length === 0 ? (
+              <p className="text-gray-400 text-sm py-6 text-center">Žiadne rezervácie</p>
+            ) : (
+              selectedReservations
+                .sort((a, b) => a.timeFrom.localeCompare(b.timeFrom))
+                .map((r) => (
+                  <ReservationRow
+                    key={r.id}
+                    reservation={r}
+                    onAction={handleAction}
+                    actionLoading={actionLoading}
+                  />
+                ))
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: "blue" | "green" | "red";
-}) {
-  const colors = {
-    blue: "bg-blue-50 text-blue-700",
-    green: "bg-green-50 text-green-700",
-    red: "bg-red-50 text-red-700",
-  };
-  return (
-    <div className={`rounded-xl p-4 ${colors[color]}`}>
-      <p className="text-3xl font-bold">{value}</p>
-      <p className="text-sm mt-1">{label}</p>
-    </div>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <h2 className="font-semibold text-gray-700 mb-3">{title}</h2>
-      <div className="bg-white rounded-xl shadow divide-y">{children}</div>
     </div>
   );
 }
@@ -205,22 +232,18 @@ function ReservationRow({
   actionLoading: string | null;
 }) {
   const isActive = r.status === "PENDING" || r.status === "CONFIRMED";
-  const dateFormatted = format(new Date(r.date), "d. MMMM", { locale: cs });
 
   return (
     <div className="p-4 flex items-center justify-between gap-4">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-gray-900">{r.customerName}</span>
-          <span
-            className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[r.status]}`}
-          >
+          <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[r.status]}`}>
             {STATUS_LABELS[r.status]}
           </span>
         </div>
         <p className="text-sm text-gray-500 mt-0.5">
-          {dateFormatted} · {r.timeFrom}–{r.timeTo} · {r.table.name} ·{" "}
-          {r.partySize} os.
+          {r.timeFrom}–{r.timeTo} · {r.table.name} · {r.partySize} os.
         </p>
         <p className="text-sm text-gray-400">{r.customerPhone}</p>
         {r.note && (
