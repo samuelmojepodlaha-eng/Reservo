@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Restaurant {
+  id                  String        @id @default(cuid())
+  slug                String        @unique
+  name                String
+  address             String?
+  phone               String?
+  email               String        @unique
+  password            String
+  depositAmount       Int           @default(100000) // v halieroch, 100000 = 1000 Kč
+  cancellationHours   Int           @default(24)
+  stripeAccountId     String?
+  tables              Table[]
+  reservations        Reservation[]
+  createdAt           DateTime      @default(now())
+}
+
+model Table {
+  id           String        @id @default(cuid())
+  restaurantId String
+  name         String
+  capacity     Int
+  isActive     Boolean       @default(true)
+  restaurant   Restaurant    @relation(fields: [restaurantId], references: [id])
+  reservations Reservation[]
+}
+
+model Reservation {
+  id                    String      @id @default(cuid())
+  restaurantId          String
+  tableId               String
+  customerName          String
+  customerEmail         String
+  customerPhone         String
+  partySize             Int
+  date                  DateTime
+  timeFrom              String
+  timeTo                String
+  status                ReservationStatus @default(PENDING)
+  stripePaymentIntentId String?
+  paymentStatus         PaymentStatus     @default(HELD)
+  note                  String?
+  restaurant            Restaurant  @relation(fields: [restaurantId], references: [id])
+  table                 Table       @relation(fields: [tableId], references: [id])
+  createdAt             DateTime    @default(now())
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  ARRIVED
+  NO_SHOW
+  CANCELLED
+}
+
+enum PaymentStatus {
+  HELD
+  CAPTURED
+  RELEASED
+  REFUNDED
+}
