@@ -56,7 +56,10 @@ function PaymentForm({ clientSecret, depositCzk, onSuccess }: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <PaymentElement options={{ layout: "tabs" }} />
+      <PaymentElement options={{
+        layout: { type: "tabs", defaultCollapsed: false },
+        wallets: { applePay: "auto", googlePay: "auto" },
+      }} />
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm">
           {error}
