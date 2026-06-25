@@ -40,20 +40,28 @@ export async function POST(
   }
 
   if (action === "noshow") {
-    if (reservation.paymentStatus !== "HELD") {
-      return NextResponse.json({ error: "Platba nie je v stave na odpočítanie" }, { status: 400 });
+    // CONFIRMED = platba autorizovaná → môžeme capture-ovať (peniaze prepadnú)
+    // PENDING = zákazník nedokončil platbu → len zrušíme rezerváciu
+    if (reservation.status === "CONFIRMED" && reservation.paymentStatus === "HELD") {
+      await capturePayment(reservation.stripePaymentIntentId);
+      await prisma.reservation.update({
+        where: { id },
+        data: { status: "NO_SHOW", paymentStatus: "CAPTURED" },
+      });
+      return NextResponse.json({ success: true, message: "Záloha prepadla reštaurácii" });
+    } else {
+      await cancelPayment(reservation.stripePaymentIntentId).catch(() => null);
+      await prisma.reservation.update({
+        where: { id },
+        data: { status: "NO_SHOW", paymentStatus: "RELEASED" },
+      });
+      return NextResponse.json({ success: true, message: "No-show zaznamenaný (platba nebola dokončená)" });
     }
-    await capturePayment(reservation.stripePaymentIntentId);
-    await prisma.reservation.update({
-      where: { id },
-      data: { status: "NO_SHOW", paymentStatus: "CAPTURED" },
-    });
-    return NextResponse.json({ success: true, message: "Záloha prepadla reštaurácii" });
   }
 
   if (action === "cancel") {
     if (reservation.paymentStatus === "HELD") {
-      await cancelPayment(reservation.stripePaymentIntentId);
+      await cancelPayment(reservation.stripePaymentIntentId).catch(() => null);
     }
     await prisma.reservation.update({
       where: { id },

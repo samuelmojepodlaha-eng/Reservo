@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchReservations = async () => {
     const res = await fetch("/api/dashboard/reservations");
@@ -58,11 +59,16 @@ export default function DashboardPage() {
     action: "arrived" | "noshow" | "cancel"
   ) => {
     setActionLoading(reservationId + action);
-    await fetch(`/api/reservations/${reservationId}/action`, {
+    setActionError(null);
+    const res = await fetch(`/api/reservations/${reservationId}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     });
+    if (!res.ok) {
+      const data = await res.json();
+      setActionError(data.error || "Nastala chyba");
+    }
     await fetchReservations();
     setActionLoading(null);
   };
@@ -93,6 +99,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="p-6 space-y-8 max-w-5xl mx-auto">
+        {actionError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+            {actionError}
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-4">
           <StatCard
             label="Dnešné rezervácie"
